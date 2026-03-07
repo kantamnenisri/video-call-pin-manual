@@ -10,6 +10,8 @@ const errorMsg = document.getElementById('error-msg');
 const localVideo = document.getElementById('local-video');
 const remoteVideo = document.getElementById('remote-video');
 const cameraToggle = document.getElementById('camera-toggle');
+const muteBtn = document.getElementById('mute-btn');
+const endCallBtn = document.getElementById('end-call-btn');
 
 let localStream;
 let peerConnection;
@@ -18,6 +20,7 @@ let isInitiator = false;
 let currentFacingMode = 'user';
 let pendingCandidates = [];
 let localStreamReady = false;
+let isMuted = false;
 
 const configuration = {
     'iceServers': [
@@ -158,6 +161,19 @@ async function createPeerConnection() {
         console.log('Connection state:', peerConnection.connectionState);
     };
 }
+
+muteBtn.addEventListener('click', () => {
+    isMuted = !isMuted;
+    localStream.getAudioTracks().forEach(track => {
+        track.enabled = !isMuted;
+    });
+    muteBtn.classList.toggle('active', isMuted);
+    muteBtn.innerHTML = isMuted ? '🔇' : '🎤';
+});
+
+endCallBtn.addEventListener('click', () => {
+    window.location.reload();
+});
 
 cameraToggle.addEventListener('click', async () => {
     currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
