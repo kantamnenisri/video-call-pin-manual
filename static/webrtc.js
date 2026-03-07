@@ -167,8 +167,9 @@ muteBtn.addEventListener('click', () => {
     localStream.getAudioTracks().forEach(track => {
         track.enabled = !isMuted;
     });
-    muteBtn.classList.toggle('active', isMuted);
-    muteBtn.innerHTML = isMuted ? '🔇' : '🎤';
+    muteBtn.classList.toggle('muted', isMuted);
+    // Keep the microphone icon but indicate status via background color
+    console.log('Microphone muted:', isMuted);
 });
 
 endCallBtn.addEventListener('click', () => {
