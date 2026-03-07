@@ -3,7 +3,7 @@ services:
     name: video-call-pin
     env: docker
     plan: free
-    dockerCommand: gunicorn --worker-class eventlet -w 1 -b 0.0.0.0:$PORT app:app
+    dockerCommand: gunicorn --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker -w 1 -b 0.0.0.0:$PORT app:app
     envVars:
       - key: PORT
         value: 8000

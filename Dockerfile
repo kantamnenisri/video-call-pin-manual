@@ -9,5 +9,5 @@ COPY . .
 
 EXPOSE 8000
 
-# Using eventlet worker class for SocketIO compatibility
-CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "-b", "0.0.0.0:8000", "app:app"]
+# Using gevent worker class for SocketIO compatibility
+CMD ["gunicorn", "--worker-class", "geventwebsocket.gunicorn.workers.GeventWebSocketWorker", "-w", "1", "-b", "0.0.0.0:8000", "app:app"]

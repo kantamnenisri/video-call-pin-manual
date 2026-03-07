@@ -1,12 +1,9 @@
-import eventlet
-eventlet.monkey_patch()
-
 from flask import Flask, send_from_directory, request
 from flask_socketio import SocketIO, join_room, leave_room, emit
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 app.config['SECRET_KEY'] = 'secret!'
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 rooms = {} # pin -> [sid1, sid2]
 
