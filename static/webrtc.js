@@ -17,12 +17,15 @@ let pin;
 let isInitiator = false;
 let currentFacingMode = 'user';
 let pendingCandidates = [];
+let localStreamReady = false;
 
 const configuration = {
     'iceServers': [
         {'urls': 'stun:stun.l.google.com:19302'},
         {'urls': 'stun:stun1.l.google.com:19302'},
-        {'urls': 'stun:stun2.l.google.com:19302'}
+        {'urls': 'stun:stun2.l.google.com:19302'},
+        {'urls': 'stun:stun3.l.google.com:19302'},
+        {'urls': 'stun:stun4.l.google.com:19302'}
     ]
 };
 
@@ -33,7 +36,7 @@ joinBtn.addEventListener('click', () => {
         return;
     }
     errorMsg.textContent = '';
-    socket.emit('join', { pin: pin, sid: socket.id });
+    socket.emit('join', { pin: pin });
 });
 
 socket.on('join_error', (data) => {
@@ -45,12 +48,17 @@ socket.on('join_success', async (data) => {
     joinContainer.style.display = 'none';
     videoContainer.style.display = 'block';
     await startLocalStream();
-    console.log('Joined as initiator:', isInitiator);
+    localStreamReady = true;
+    console.log('Local stream ready. Initiator:', isInitiator);
 });
 
 socket.on('peer_joined', async () => {
-    console.log('Peer joined, creating offer...');
+    console.log('Peer joined notification received.');
+    // Wait for local stream if not ready
+    while(!localStreamReady) await new Promise(r => setTimeout(r, 100));
+    
     if (isInitiator) {
+        console.log('Initiator creating offer...');
         await createPeerConnection();
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
@@ -59,11 +67,15 @@ socket.on('peer_joined', async () => {
 });
 
 socket.on('signal', async (signal) => {
+    // Wait for local stream before processing any signals
+    while(!localStreamReady) await new Promise(r => setTimeout(r, 100));
+
     if (!peerConnection) {
         await createPeerConnection();
     }
 
     if (signal.sdp) {
+        console.log('Received SDP:', signal.sdp.type);
         await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.sdp));
         if (signal.sdp.type === 'offer') {
             const answer = await peerConnection.createAnswer();
@@ -71,15 +83,14 @@ socket.on('signal', async (signal) => {
             socket.emit('signal', { pin: pin, signal: { 'sdp': peerConnection.localDescription } });
         }
         
-        // Process any queued candidates
         while (pendingCandidates.length > 0) {
             const candidate = pendingCandidates.shift();
-            await peerConnection.addIceCandidate(candidate);
+            await peerConnection.addIceCandidate(candidate).catch(e => console.error(e));
         }
     } else if (signal.ice) {
         const candidate = new RTCIceCandidate(signal.ice);
         if (peerConnection.remoteDescription) {
-            await peerConnection.addIceCandidate(candidate);
+            await peerConnection.addIceCandidate(candidate).catch(e => console.error(e));
         } else {
             pendingCandidates.push(candidate);
         }
@@ -106,49 +117,45 @@ async function startLocalStream() {
             localStream.getTracks().forEach(track => track.stop());
         }
         localStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: currentFacingMode },
+            video: { 
+                facingMode: currentFacingMode,
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            },
             audio: true
         });
         localVideo.srcObject = localStream;
     } catch (err) {
         console.error('Error accessing media devices.', err);
-        alert('Camera/Microphone access denied. Please ensure you are using HTTPS.');
+        alert('Camera error. Please ensure HTTPS is used and permissions are granted.');
     }
 }
 
 async function createPeerConnection() {
     if (peerConnection) return;
     
-    console.log('Creating RTCPeerConnection...');
+    console.log('Creating PeerConnection...');
     peerConnection = new RTCPeerConnection(configuration);
     
-    if (localStream) {
-        localStream.getTracks().forEach(track => {
-            peerConnection.addTrack(track, localStream);
-        });
-    }
+    localStream.getTracks().forEach(track => {
+        peerConnection.addTrack(track, localStream);
+    });
 
     peerConnection.ontrack = (event) => {
-        console.log('Received remote track:', event.track.kind);
-        if (!remoteVideo.srcObject) {
-            remoteVideo.srcObject = new MediaStream();
+        console.log('Remote track received:', event.track.kind);
+        if (remoteVideo.srcObject !== event.streams[0]) {
+            remoteVideo.srcObject = event.streams[0];
         }
-        remoteVideo.srcObject.addTrack(event.track);
     };
 
     peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
-            console.log('Sending ICE candidate');
             socket.emit('signal', { pin: pin, signal: { 'ice': event.candidate } });
         }
     };
 
     peerConnection.onconnectionstatechange = () => {
-        console.log('Connection state change:', peerConnection.connectionState);
-    };
-
-    peerConnection.oniceconnectionstatechange = () => {
-        console.log('ICE connection state change:', peerConnection.iceConnectionState);
+        console.log('Connection state:', peerConnection.connectionState);
     };
 }
 
