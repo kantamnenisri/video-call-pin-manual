@@ -119,27 +119,36 @@ async function startLocalStream() {
 async function createPeerConnection() {
     if (peerConnection) return;
     
+    console.log('Creating RTCPeerConnection...');
     peerConnection = new RTCPeerConnection(configuration);
     
-    localStream.getTracks().forEach(track => {
-        peerConnection.addTrack(track, localStream);
-    });
+    if (localStream) {
+        localStream.getTracks().forEach(track => {
+            peerConnection.addTrack(track, localStream);
+        });
+    }
 
     peerConnection.ontrack = (event) => {
-        console.log('Received remote track');
-        if (remoteVideo.srcObject !== event.streams[0]) {
-            remoteVideo.srcObject = event.streams[0];
+        console.log('Received remote track:', event.track.kind);
+        if (!remoteVideo.srcObject) {
+            remoteVideo.srcObject = new MediaStream();
         }
+        remoteVideo.srcObject.addTrack(event.track);
     };
 
     peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
+            console.log('Sending ICE candidate');
             socket.emit('signal', { pin: pin, signal: { 'ice': event.candidate } });
         }
     };
 
     peerConnection.onconnectionstatechange = () => {
-        console.log('Connection state:', peerConnection.connectionState);
+        console.log('Connection state change:', peerConnection.connectionState);
+    };
+
+    peerConnection.oniceconnectionstatechange = () => {
+        console.log('ICE connection state change:', peerConnection.iceConnectionState);
     };
 }
 

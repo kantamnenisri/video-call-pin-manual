@@ -13,23 +13,31 @@ def index():
 
 @socketio.on('join')
 def on_join(data):
-    pin = data['pin']
-    sid = data['sid']
+    pin = str(data.get('pin', ''))
+    sid = request.sid
 
-    if pin not in rooms:
-        rooms[pin] = []
-    
-    if len(rooms[pin]) >= 2:
-        emit('join_error', {'message': 'Room full'}, to=sid)
+    if not pin or len(pin) != 6:
+        emit('join_error', {'message': 'Invalid PIN format'}, to=sid)
         return
 
-    rooms[pin].append(sid)
-    join_room(pin)
+    # If room exists, check if it's full
+    if pin in rooms:
+        if len(rooms[pin]) >= 2:
+            emit('join_error', {'message': 'Room full'}, to=sid)
+            return
+        # Second user joins existing room
+        rooms[pin].append(sid)
+        is_initiator = False
+    else:
+        # First user creates the room
+        rooms[pin] = [sid]
+        is_initiator = True
     
-    emit('join_success', {'message': f'Joined room {pin}', 'is_initiator': len(rooms[pin]) == 1}, to=sid)
+    join_room(pin)
+    emit('join_success', {'message': f'Joined room {pin}', 'is_initiator': is_initiator}, to=sid)
     
     if len(rooms[pin]) == 2:
-        # Notify the first person that the second person joined
+        # Notify the initiator that the peer has joined
         emit('peer_joined', {}, to=rooms[pin][0])
 
 @socketio.on('signal')
